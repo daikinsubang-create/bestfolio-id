@@ -148,12 +148,14 @@ const LandingPage = () => {
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => setUser(u));
     
     const fetchData = async () => {
       try {
+        setError(null);
         // Fetch content
         const contentSnap = await getDocs(collection(db, "portfolio_content"));
         const content: any = {};
@@ -202,8 +204,13 @@ const LandingPage = () => {
           about_philosophy: content.about_philosophy || "",
           members: members
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching data:", err);
+        if (err.code === 'permission-denied') {
+          setError("Firebase Permission Denied: Please update your Firestore Security Rules in the Firebase Console to allow public read access.");
+        } else {
+          setError("Failed to connect to Firebase. Please check your configuration.");
+        }
       } finally {
         setLoading(false);
       }
@@ -213,13 +220,52 @@ const LandingPage = () => {
     return () => unsubscribeAuth();
   }, []);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <Loader2 className="w-8 h-8 animate-spin text-zinc-900" />
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-6">
+        <div className="max-w-2xl w-full bg-white rounded-[40px] p-12 shadow-xl border border-zinc-100 text-center">
+          <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-8">
+            <AlertCircle className="w-10 h-10 text-red-500" />
+          </div>
+          <h2 className="text-3xl font-bold tracking-tighter uppercase mb-6">Firebase Setup Required</h2>
+          <p className="text-zinc-500 mb-10 leading-relaxed">
+            {error}
+          </p>
+          <div className="bg-zinc-900 text-left p-6 rounded-2xl mb-10 overflow-x-auto">
+            <pre className="text-[10px] text-zinc-400 font-mono leading-relaxed">
+              {`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+            </pre>
+          </div>
+          <p className="text-xs text-zinc-400 uppercase font-bold tracking-widest mb-8">
+            Paste the rules above in Firebase Console &gt; Firestore &gt; Rules
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-10 py-4 bg-zinc-900 text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-zinc-800 transition-all"
+          >
+            I've Updated the Rules
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   const getIcon = (role: string) => {
     const r = role.toLowerCase();
@@ -522,6 +568,7 @@ const AdminDashboard = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
   const navigate = useNavigate();
 
@@ -539,6 +586,7 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
+      setError(null);
       const contentSnap = await getDocs(collection(db, "portfolio_content"));
       const content: any = {};
       contentSnap.forEach(doc => {
@@ -557,8 +605,13 @@ const AdminDashboard = () => {
         about_philosophy: content.about_philosophy || "",
         members: members
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching data:", err);
+      if (err.code === 'permission-denied') {
+        setError("Firebase Permission Denied: Please update your Firestore Security Rules.");
+      } else {
+        setError("Failed to connect to Firebase.");
+      }
     } finally {
       setLoading(false);
     }
@@ -575,8 +628,12 @@ const AdminDashboard = () => {
       await setDoc(doc(db, "portfolio_content", id), { content });
       showToast("success", "Content updated successfully");
       fetchData();
-    } catch (err) {
-      showToast("error", "Failed to update content");
+    } catch (err: any) {
+      if (err.code === 'permission-denied') {
+        showToast("error", "Permission denied: Update Firestore rules");
+      } else {
+        showToast("error", "Failed to update content");
+      }
     } finally {
       setSaving(false);
     }
@@ -596,8 +653,12 @@ const AdminDashboard = () => {
       setEditingMember(null);
       setIsAdding(false);
       fetchData();
-    } catch (err) {
-      showToast("error", "Action failed");
+    } catch (err: any) {
+      if (err.code === 'permission-denied') {
+        showToast("error", "Permission denied: Update Firestore rules");
+      } else {
+        showToast("error", "Action failed");
+      }
     } finally {
       setSaving(false);
     }
@@ -610,20 +671,60 @@ const AdminDashboard = () => {
       await deleteDoc(doc(db, "members", id));
       showToast("success", "Member deleted");
       fetchData();
-    } catch (err) {
-      showToast("error", "Failed to delete");
+    } catch (err: any) {
+      if (err.code === 'permission-denied') {
+        showToast("error", "Permission denied: Update Firestore rules");
+      } else {
+        showToast("error", "Failed to delete");
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <Loader2 className="w-8 h-8 animate-spin text-zinc-900" />
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-6">
+        <div className="max-w-2xl w-full bg-white rounded-[40px] p-12 shadow-xl border border-zinc-100 text-center">
+          <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-8">
+            <AlertCircle className="w-10 h-10 text-red-500" />
+          </div>
+          <h2 className="text-3xl font-bold tracking-tighter uppercase mb-6">Permission Error</h2>
+          <p className="text-zinc-500 mb-10 leading-relaxed">
+            {error}
+          </p>
+          <div className="bg-zinc-900 text-left p-6 rounded-2xl mb-10 overflow-x-auto">
+            <pre className="text-[10px] text-zinc-400 font-mono leading-relaxed">
+              {`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+            </pre>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-10 py-4 bg-zinc-900 text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-zinc-800 transition-all"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <div className="min-h-screen bg-zinc-50 pt-32 pb-20 px-6">
